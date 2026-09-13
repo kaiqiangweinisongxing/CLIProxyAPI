@@ -141,7 +141,7 @@ func BuildServiceSpec(cfg *config.Config, port int, tlsEnabled bool) (ServiceSpe
 	var subtypes []string
 	rawSubtypes := discCfg.Subtypes
 	if len(rawSubtypes) == 0 {
-		rawSubtypes = []string{SubtypeCliproxy, SubtypeOpenAI, SubtypeAnthropic}
+		rawSubtypes = []string{SubtypeCliproxy, SubtypeOpenAI, SubtypeAnthropic, SubtypeGemini}
 	}
 	for _, raw := range rawSubtypes {
 		if clean := sanitizeSubtype(raw); clean != "" {

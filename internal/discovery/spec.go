@@ -43,7 +43,7 @@ func DefaultTXTOptions() TXTOptions {
 		Version:          "1",
 		Product:          ProductCPA,
 		Protocols:        []string{"openai", "anthropic", "gemini"},
-		Features:         []string{"chat", "responses", "messages"},
+		Features:         []string{"chat", "responses", "messages", "generate_content", "interactions"},
 		APIPathOpenAI:    "/v1",
 		APIPathAnthropic: "/v1",
 		APIPathGemini:    "/v1beta",

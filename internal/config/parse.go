@@ -37,7 +37,7 @@ func ParseConfigBytes(data []byte) (*Config, error) {
 	cfg.Pprof.Addr = DefaultPprofAddr
 	cfg.Discovery.Enabled = false
 	cfg.Discovery.ServiceType = DefaultDiscoveryServiceType
-	cfg.Discovery.Subtypes = []string{"_cliproxy", "_openai", "_anthropic"}
+	cfg.Discovery.Subtypes = []string{"_cliproxy", "_openai", "_anthropic", "_gemini"}
 	cfg.Discovery.Interfaces.Exclude = []string{"docker*", "utun*", "tailscale*", "wg*", "awdl*"}
 	cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
 	cfg.CredentialInFlight = DefaultCredentialInFlightConfig()
@@ -57,7 +57,7 @@ func ParseConfigBytes(data []byte) (*Config, error) {
 		cfg.Discovery.ServiceType = DefaultDiscoveryServiceType
 	}
 	if len(cfg.Discovery.Subtypes) == 0 {
-		cfg.Discovery.Subtypes = []string{"_cliproxy", "_openai", "_anthropic"}
+		cfg.Discovery.Subtypes = []string{"_cliproxy", "_openai", "_anthropic", "_gemini"}
 	}
 
 	// Hash remote management key if plaintext is detected (nested), but do NOT persist.

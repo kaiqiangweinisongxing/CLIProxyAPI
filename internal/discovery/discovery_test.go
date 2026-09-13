@@ -109,6 +109,10 @@ func TestBuildTXTRecords_SizeAndKeys(t *testing.T) {
 	if parsed["api_gemini"] != "/v1beta" {
 		t.Errorf("expected api_gemini=/v1beta, got %s", parsed["api_gemini"])
 	}
+	expectedFeatures := "chat,responses,messages,generate_content,interactions"
+	if parsed["features"] != expectedFeatures {
+		t.Errorf("expected features=%s, got %s", expectedFeatures, parsed["features"])
+	}
 
 	// Calculate total bytes
 	totalBytes := 0
