@@ -62,7 +62,7 @@ discovery:
   legacy-alias: false               # Also advertise legacy _cliproxy._tcp alias
   interfaces:
     include: []                     # White-listed interfaces (empty: auto-detect physical interfaces)
-    exclude: ["docker*", "utun*"]   # Black-listed interfaces
+    exclude: ["docker*", "utun*", "tailscale*", "wg*", "awdl*"]   # Black-listed interfaces (containers, tunnels, AWDL)
   auth-required: true               # Advertise that credentials are required
 
 # Credential concurrency is configured by Home in Home mode. The synthesized Home config is

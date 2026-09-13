@@ -154,11 +154,11 @@ func DoDiscover(timeout time.Duration, jsonOutput bool) int {
 	return 0
 }
 
-// sanitizeTerminal strips control characters and ANSI escape sequences to prevent terminal injection.
+// sanitizeTerminal strips control characters, C1 codes, and ANSI escape sequences to prevent terminal injection.
 func sanitizeTerminal(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if r >= 32 && r != 127 {
+		if (r >= 32 && r < 127) || (r > 0x9F) {
 			b.WriteRune(r)
 		} else if r == '\t' {
 			b.WriteRune(' ')

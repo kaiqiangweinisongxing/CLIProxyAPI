@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,48 @@ type ZeroconfAdvertiser struct {
 // NewZeroconfAdvertiser returns a new ZeroconfAdvertiser.
 func NewZeroconfAdvertiser() *ZeroconfAdvertiser {
 	return &ZeroconfAdvertiser{}
+}
+
+// extractCleanHost returns bare hostname without any .local suffix
+// to prevent grandcat/zeroconf from appending a duplicate .local. (e.g. on macOS).
+func extractCleanHost() string {
+	h, err := os.Hostname()
+	if err != nil || h == "" {
+		return "localhost"
+	}
+	h = strings.TrimSpace(h)
+	h = strings.TrimSuffix(h, ".")
+	h = strings.TrimSuffix(h, ".local")
+	h = strings.TrimSuffix(h, ".")
+	if h == "" {
+		return "localhost"
+	}
+	return h
+}
+
+// extractInterfaceIPs collects non-loopback IP addresses from the selected interfaces.
+func extractInterfaceIPs(ifaces []net.Interface) []string {
+	var ips []string
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() || ip.IsUnspecified() {
+				continue
+			}
+			ips = append(ips, ip.String())
+		}
+	}
+	return ips
 }
 
 // Start registers and starts mDNS advertisement for the primary service type
@@ -73,12 +116,20 @@ func (a *ZeroconfAdvertiser) Start(ctx context.Context, spec ServiceSpec) (err e
 		serviceType = DefaultServiceType
 	}
 
+	cleanHost := extractCleanHost()
+	ips := extractInterfaceIPs(spec.Interfaces)
+	if len(ips) == 0 {
+		return fmt.Errorf("discovery: no qualified IP addresses found on specified interfaces")
+	}
+
 	// 1. Primary advertisement: e.g. _ai-gateway._tcp
-	primaryServer, errRegister := zeroconf.Register(
+	primaryServer, errRegister := zeroconf.RegisterProxy(
 		spec.InstanceName,
 		serviceType,
 		domain,
 		spec.Port,
+		cleanHost,
+		ips,
 		spec.TextRecords,
 		spec.Interfaces,
 	)
@@ -95,11 +146,13 @@ func (a *ZeroconfAdvertiser) Start(ctx context.Context, spec ServiceSpec) (err e
 		}
 		// Register subtype PTR or alias: e.g. _cliproxy._sub._ai-gateway._tcp
 		subTypeStr := fmt.Sprintf("%s._sub.%s", sub, serviceType)
-		subServer, errSub := zeroconf.Register(
+		subServer, errSub := zeroconf.RegisterProxy(
 			spec.InstanceName,
 			subTypeStr,
 			domain,
 			spec.Port,
+			cleanHost,
+			ips,
 			spec.TextRecords,
 			spec.Interfaces,
 		)
@@ -112,11 +165,13 @@ func (a *ZeroconfAdvertiser) Start(ctx context.Context, spec ServiceSpec) (err e
 
 	// 3. Legacy compatibility alias registration (_cliproxy._tcp) if requested
 	if spec.LegacyAlias && spec.ServiceType != "_cliproxy._tcp" {
-		aliasServer, errAlias := zeroconf.Register(
+		aliasServer, errAlias := zeroconf.RegisterProxy(
 			spec.InstanceName,
 			"_cliproxy._tcp",
 			domain,
 			spec.Port,
+			cleanHost,
+			ips,
 			spec.TextRecords,
 			spec.Interfaces,
 		)
@@ -128,20 +183,6 @@ func (a *ZeroconfAdvertiser) Start(ctx context.Context, spec ServiceSpec) (err e
 	}
 
 	a.closed = false
-
-	// Handle context cancellation and stop signal
-	if ctx != nil && ctx.Done() != nil {
-		stopCh := a.stopCh
-		go func() {
-			select {
-			case <-ctx.Done():
-				_ = a.Stop()
-			case <-stopCh:
-				return
-			}
-		}()
-	}
-
 	return nil
 }
 
@@ -212,55 +253,29 @@ func (b *ZeroconfBrowser) Browse(ctx context.Context, serviceType, domain string
 	var mu sync.Mutex
 	seen := make(map[string]bool)
 
-	// Collect entries in background with strict cancellation handling
+	// Collect entries in background until channel is closed by zeroconf's params.done()
 	doneCh := make(chan struct{})
 	go func() {
 		defer close(doneCh)
-		for {
-			select {
-			case <-ctxTimeout.Done():
-				// Drain any entries already buffered and exit
-				for {
-					select {
-					case entry, ok := <-entries:
-						if !ok || entry == nil {
-							return
-						}
-						svc := entryToDiscovered(entry)
-						key := fmt.Sprintf("%s:%s:%d", svc.InstanceName, svc.Host, svc.Port)
-						mu.Lock()
-						if !seen[key] {
-							seen[key] = true
-							discovered = append(discovered, svc)
-						}
-						mu.Unlock()
-					default:
-						return
-					}
-				}
-			case entry, ok := <-entries:
-				if !ok {
-					return
-				}
-				if entry == nil {
-					continue
-				}
-				svc := entryToDiscovered(entry)
-				key := fmt.Sprintf("%s:%s:%d", svc.InstanceName, svc.Host, svc.Port)
-				mu.Lock()
-				if !seen[key] {
-					seen[key] = true
-					discovered = append(discovered, svc)
-				}
-				mu.Unlock()
+		for entry := range entries {
+			if entry == nil {
+				continue
 			}
+			svc := entryToDiscovered(entry)
+			key := fmt.Sprintf("%s:%s:%d", svc.InstanceName, svc.Host, svc.Port)
+			mu.Lock()
+			if !seen[key] {
+				seen[key] = true
+				discovered = append(discovered, svc)
+			}
+			mu.Unlock()
 		}
 	}()
 
 	errBrowse := resolver.Browse(ctxTimeout, serviceType, domain, entries)
 	if errBrowse != nil {
-		cancel() // Cancel context immediately so collector terminates
-		<-doneCh // Wait for collector goroutine to exit cleanly
+		cancel() // Signal resolver to terminate
+		<-doneCh // Wait for entries channel to be closed by resolver
 		return nil, fmt.Errorf("discovery: browse query failed: %w", errBrowse)
 	}
 

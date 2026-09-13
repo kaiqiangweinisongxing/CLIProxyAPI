@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
@@ -82,7 +83,8 @@ func sanitizeSubtype(sub string) string {
 	return sub
 }
 
-// sanitizeInstanceName limits name to 63 bytes and removes control characters.
+// sanitizeInstanceName limits name to 63 bytes without breaking UTF-8 rune boundaries
+// and removes ASCII control characters.
 func sanitizeInstanceName(name string) string {
 	var b strings.Builder
 	for _, r := range name {
@@ -91,8 +93,12 @@ func sanitizeInstanceName(name string) string {
 		}
 	}
 	res := strings.TrimSpace(b.String())
-	if len(res) > 63 {
-		res = res[:63]
+	for len(res) > 63 {
+		_, size := utf8.DecodeLastRuneInString(res)
+		if size == 0 {
+			break
+		}
+		res = res[:len(res)-size]
 	}
 	return res
 }

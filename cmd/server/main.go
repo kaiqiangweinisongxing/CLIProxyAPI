@@ -70,15 +70,28 @@ func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, tuiMode,
 // It parses command-line flags, loads configuration, and starts the appropriate
 // service based on the provided flags (login, codex-login, or server mode).
 func main() {
-	fmt.Printf("CLIProxyAPI Version: %s, Commit: %s, BuiltAt: %s\n", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
-
 	if len(os.Args) > 1 && os.Args[1] == "discover" {
 		discoverFlags := flag.NewFlagSet("discover", flag.ExitOnError)
 		timeoutSec := discoverFlags.Int("timeout", 3, "Discovery timeout in seconds")
 		jsonOut := discoverFlags.Bool("json", false, "Output in JSON format")
 		_ = discoverFlags.Parse(os.Args[2:])
+		if !*jsonOut {
+			fmt.Fprintf(os.Stderr, "CLIProxyAPI Version: %s, Commit: %s, BuiltAt: %s\n", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
+		}
 		code := cmd.DoDiscover(time.Duration(*timeoutSec)*time.Second, *jsonOut)
 		os.Exit(code)
+	}
+
+	// For legacy --discover-json flag or JSON requests, keep stdout clean
+	isJSONDiscover := false
+	for _, arg := range os.Args[1:] {
+		if arg == "-discover-json" || arg == "--discover-json" {
+			isJSONDiscover = true
+			break
+		}
+	}
+	if !isJSONDiscover {
+		fmt.Printf("CLIProxyAPI Version: %s, Commit: %s, BuiltAt: %s\n", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
 	}
 
 	// Command-line flags to control the application's behavior.

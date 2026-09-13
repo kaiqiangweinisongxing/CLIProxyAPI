@@ -247,10 +247,6 @@ type DiscoveryConfig struct {
 	// Interfaces specifies network interface filtering rules.
 	Interfaces DiscoveryInterfacesConfig `yaml:"interfaces" json:"interfaces"`
 
-	// IPv4 and IPv6: zeroconf joins both IPv4 and IPv6 multicast groups on filtered physical interfaces by default.
-	IPv4 *bool `yaml:"ipv4,omitempty" json:"ipv4,omitempty"`
-	IPv6 bool  `yaml:"ipv6,omitempty" json:"ipv6,omitempty"`
-
 	// AuthRequired indicates whether authentication is required for client calls (default: true).
 	AuthRequired *bool `yaml:"auth-required" json:"auth-required"`
 

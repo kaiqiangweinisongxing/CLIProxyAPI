@@ -20,6 +20,18 @@ func newDiscoveryAdvertiserManager() *discoveryAdvertiserManager {
 	return &discoveryAdvertiserManager{}
 }
 
+func (s *Service) getDiscoveryManager() *discoveryAdvertiserManager {
+	if s == nil {
+		return nil
+	}
+	s.cfgMu.Lock()
+	defer s.cfgMu.Unlock()
+	if s.discoveryManager == nil {
+		s.discoveryManager = newDiscoveryAdvertiserManager()
+	}
+	return s.discoveryManager
+}
+
 func (s *Service) applyDiscoveryConfig(cfg *config.Config) {
 	s.applyDiscoveryConfigContext(context.Background(), cfg)
 }
@@ -28,17 +40,22 @@ func (s *Service) applyDiscoveryConfigContext(ctx context.Context, cfg *config.C
 	if s == nil || cfg == nil || (ctx != nil && ctx.Err() != nil) {
 		return false
 	}
-	if s.discoveryManager == nil {
-		s.discoveryManager = newDiscoveryAdvertiserManager()
+	mgr := s.getDiscoveryManager()
+	if mgr == nil {
+		return false
 	}
-	return s.discoveryManager.ApplyContext(ctx, cfg, cfg.Port, cfg.TLS.Enable)
+	return mgr.ApplyContext(ctx, cfg, cfg.Port, cfg.TLS.Enable)
 }
 
 func (s *Service) shutdownDiscovery() error {
-	if s == nil || s.discoveryManager == nil {
+	if s == nil {
 		return nil
 	}
-	return s.discoveryManager.Shutdown()
+	mgr := s.getDiscoveryManager()
+	if mgr == nil {
+		return nil
+	}
+	return mgr.Shutdown()
 }
 
 func (m *discoveryAdvertiserManager) ApplyContext(ctx context.Context, cfg *config.Config, port int, tlsEnabled bool) bool {

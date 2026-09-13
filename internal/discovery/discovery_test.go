@@ -174,11 +174,22 @@ func TestValidation_ServiceTypeAndLabels(t *testing.T) {
 	if p := sanitizeEndpointPath("/../etc/passwd"); p != "" {
 		t.Errorf("expected empty for traversal, got %s", p)
 	}
+
+	// Instance name UTF-8 rune boundary sanitization
+	// 20 Chinese characters = 60 bytes (valid), 22 Chinese characters = 66 bytes (exceeds 63)
+	longChinese := strings.Repeat("网", 22)
+	truncated := sanitizeInstanceName(longChinese)
+	if len(truncated) > 63 {
+		t.Errorf("expected instance name <= 63 bytes, got %d", len(truncated))
+	}
+	if len(truncated)%3 != 0 {
+		t.Errorf("expected clean UTF-8 rune boundary (multiple of 3 for Chinese characters), got %d", len(truncated))
+	}
 }
 
 func TestInterfaceFiltering_Helpers(t *testing.T) {
 	// Test isVirtualOrTunnel
-	virtualNames := []string{"docker0", "veth45a", "utun3", "tailscale0", "wg0", "tun1", "tap0", "br-123"}
+	virtualNames := []string{"docker0", "veth45a", "utun3", "tailscale0", "wg0", "tun1", "tap0", "br-123", "awdl0", "llw0"}
 	for _, name := range virtualNames {
 		if !isVirtualOrTunnel(name) {
 			t.Errorf("expected %s to be recognized as virtual/tunnel interface", name)

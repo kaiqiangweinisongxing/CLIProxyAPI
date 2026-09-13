@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// IgnoredInterfacePrefixes defines interface prefixes to exclude by default (virtual/container/VPN).
+// IgnoredInterfacePrefixes defines interface prefixes to exclude by default (virtual/container/VPN/P2P).
 var IgnoredInterfacePrefixes = []string{
 	"docker",
 	"veth",
@@ -20,6 +20,8 @@ var IgnoredInterfacePrefixes = []string{
 	"virbr",
 	"vmnet",
 	"vboxnet",
+	"awdl",
+	"llw",
 }
 
 // FilterInterfaces selects qualified physical multicast-capable LAN interfaces according to Strategy C.
