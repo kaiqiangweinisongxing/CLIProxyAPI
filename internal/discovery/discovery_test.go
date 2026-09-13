@@ -187,12 +187,21 @@ func TestValidation_ServiceTypeAndLabels(t *testing.T) {
 		t.Errorf("expected empty for _openai-, got %s", s)
 	}
 
-	// Endpoint path sanitization
+	// Endpoint path sanitization (defense against traversal and protocol-relative SSRF)
 	if p := sanitizeEndpointPath("/v1"); p != "/v1" {
 		t.Errorf("expected /v1, got %s", p)
 	}
+	if p := sanitizeEndpointPath("/v1/chat/completions"); p != "/v1/chat/completions" {
+		t.Errorf("expected /v1/chat/completions, got %s", p)
+	}
 	if p := sanitizeEndpointPath("http://evil.com/v1"); p != "" {
 		t.Errorf("expected empty for absolute URL, got %s", p)
+	}
+	if p := sanitizeEndpointPath("//attacker.com/v1"); p != "" {
+		t.Errorf("expected empty for protocol-relative URL //attacker.com/v1, got %s", p)
+	}
+	if p := sanitizeEndpointPath("/\\attacker.com/v1"); p != "" {
+		t.Errorf("expected empty for backslash path /\\attacker.com/v1, got %s", p)
 	}
 	if p := sanitizeEndpointPath("/../etc/passwd"); p != "" {
 		t.Errorf("expected empty for traversal, got %s", p)

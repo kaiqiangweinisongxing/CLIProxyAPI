@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/discovery"
 )
@@ -18,6 +19,8 @@ import (
 func DoDiscover(timeout time.Duration, jsonOutput bool) int {
 	if timeout <= 0 {
 		timeout = 3 * time.Second
+	} else if timeout > 60*time.Second {
+		timeout = 60 * time.Second
 	}
 
 	if !jsonOutput {
@@ -154,14 +157,20 @@ func DoDiscover(timeout time.Duration, jsonOutput bool) int {
 	return 0
 }
 
-// sanitizeTerminal strips control characters, C1 codes, and ANSI escape sequences to prevent terminal injection.
+// sanitizeTerminal strips control characters, ANSI escape sequences, Bidi overrides,
+// and invisible Unicode format characters to prevent terminal injection and spoofing.
 func sanitizeTerminal(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if (r >= 32 && r < 127) || (r > 0x9F) {
-			b.WriteRune(r)
-		} else if r == '\t' {
+		if r == '\t' {
 			b.WriteRune(' ')
+			continue
+		}
+		// Allow safe printable runes; block Bidi controls, zero-width chars, and line/paragraph separators
+		if unicode.IsPrint(r) && !unicode.Is(unicode.Bidi_Control, r) {
+			if r != '\u2028' && r != '\u2029' && !(r >= 0x200B && r <= 0x200F) && r != '\uFEFF' && r != 0x00AD {
+				b.WriteRune(r)
+			}
 		}
 	}
 	return b.String()

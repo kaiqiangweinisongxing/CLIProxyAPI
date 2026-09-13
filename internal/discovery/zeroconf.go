@@ -191,6 +191,8 @@ func NewZeroconfBrowser(ifaces ...net.Interface) *ZeroconfBrowser {
 	return &ZeroconfBrowser{options: opts}
 }
 
+const maxDiscoveredServices = 256
+
 // Browse performs a standard mDNS browse query for the given service type.
 func (b *ZeroconfBrowser) Browse(ctx context.Context, serviceType, domain string, timeout time.Duration) ([]DiscoveredService, error) {
 	if domain == "" {
@@ -230,7 +232,9 @@ func (b *ZeroconfBrowser) Browse(ctx context.Context, serviceType, domain string
 			mu.Lock()
 			if !seen[key] {
 				seen[key] = true
-				discovered = append(discovered, svc)
+				if len(discovered) < maxDiscoveredServices {
+					discovered = append(discovered, svc)
+				}
 			}
 			mu.Unlock()
 		}
@@ -239,6 +243,8 @@ func (b *ZeroconfBrowser) Browse(ctx context.Context, serviceType, domain string
 	errBrowse := zeroconf.Browse(ctxTimeout, serviceType, domain, entries, b.options...)
 	if errBrowse != nil {
 		cancel()
+		// zeroconf failed before launching mainloop; close entries so collector terminates cleanly
+		close(entries)
 		<-doneCh
 		return nil, fmt.Errorf("discovery: browse query failed: %w", errBrowse)
 	}
@@ -274,10 +280,10 @@ func (b *ZeroconfBrowser) BrowseWithFallback(ctx context.Context, timeout time.D
 }
 
 // sanitizeEndpointPath validates that an endpoint path is a safe relative API path
-// starting with '/' and containing no scheme, domain, or traversal elements.
+// starting with '/' and containing no scheme, domain, protocol-relative prefixes, or traversal elements.
 func sanitizeEndpointPath(p string) string {
 	p = strings.TrimSpace(p)
-	if !strings.HasPrefix(p, "/") || strings.Contains(p, "://") || strings.Contains(p, "..") {
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.Contains(p, `\`) || strings.Contains(p, "://") || strings.Contains(p, "..") {
 		return ""
 	}
 	for _, r := range p {
