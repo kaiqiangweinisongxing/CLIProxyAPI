@@ -174,6 +174,11 @@ func main() {
 	// Parse the command-line flags.
 	flag.Parse()
 
+	if discoverGateways {
+		code := cmd.DoDiscover(time.Duration(discoverTimeout)*time.Second, discoverJSON)
+		os.Exit(code)
+	}
+
 	// Core application variables.
 	var err error
 	var cfg *config.Config
@@ -690,9 +695,6 @@ func main() {
 		cmd.DoKimiLogin(cfg, options)
 	} else if xaiLogin {
 		cmd.DoXAILogin(cfg, options)
-	} else if discoverGateways {
-		code := cmd.DoDiscover(time.Duration(discoverTimeout)*time.Second, discoverJSON)
-		os.Exit(code)
 	} else {
 		// In cloud deploy mode without config file, just wait for shutdown signals
 		if isCloudDeploy && !configFileExists {
