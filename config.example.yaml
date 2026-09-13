@@ -49,6 +49,22 @@ pprof:
   enable: false
   addr: "127.0.0.1:8316"
 
+# Enable local network mDNS / DNS-SD service discovery (RFC 6762 / RFC 6763).
+# When enabled, broadcasts _ai-gateway._tcp and _cliproxy._sub on the local network.
+discovery:
+  enabled: false
+  service-name: ""                  # Custom display name (defaults to CPA-<ShortID>)
+  service-type: "_ai-gateway._tcp"  # Service type
+  subtypes:
+    - "_cliproxy"
+    - "_openai"
+    - "_anthropic"
+  legacy-alias: false               # Also advertise legacy _cliproxy._tcp alias
+  interfaces:
+    include: []                     # White-listed interfaces (empty: auto-detect physical interfaces)
+    exclude: ["docker*", "utun*"]   # Black-listed interfaces
+  auth-required: true               # Advertise that credentials are required
+
 # Credential concurrency is configured by Home in Home mode. The synthesized Home config is
 # authoritative and local values, including the values below, are ignored. Do not use local
 # configuration to override a Home concurrency policy.

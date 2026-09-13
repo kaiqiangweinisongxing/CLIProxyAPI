@@ -72,6 +72,15 @@ func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, tuiMode,
 func main() {
 	fmt.Printf("CLIProxyAPI Version: %s, Commit: %s, BuiltAt: %s\n", buildinfo.Version, buildinfo.Commit, buildinfo.BuildDate)
 
+	if len(os.Args) > 1 && os.Args[1] == "discover" {
+		discoverFlags := flag.NewFlagSet("discover", flag.ExitOnError)
+		timeoutSec := discoverFlags.Int("timeout", 3, "Discovery timeout in seconds")
+		jsonOut := discoverFlags.Bool("json", false, "Output in JSON format")
+		_ = discoverFlags.Parse(os.Args[2:])
+		code := cmd.DoDiscover(time.Duration(*timeoutSec)*time.Second, *jsonOut)
+		os.Exit(code)
+	}
+
 	// Command-line flags to control the application's behavior.
 	var codexLogin bool
 	var codexDeviceLogin bool
@@ -81,6 +90,9 @@ func main() {
 	var antigravityLogin bool
 	var kimiLogin bool
 	var xaiLogin bool
+	var discoverGateways bool
+	var discoverTimeout int
+	var discoverJSON bool
 	var vertexImport string
 	var vertexImportPrefix string
 	var configPath string
@@ -100,6 +112,9 @@ func main() {
 	flag.BoolVar(&antigravityLogin, "antigravity-login", false, "Login to Antigravity using OAuth")
 	flag.BoolVar(&kimiLogin, "kimi-login", false, "Login to Kimi using OAuth")
 	flag.BoolVar(&xaiLogin, "xai-login", false, "Login to xAI using OAuth")
+	flag.BoolVar(&discoverGateways, "discover", false, "Discover local AI gateways and CPA instances on the LAN")
+	flag.IntVar(&discoverTimeout, "discover-timeout", 3, "Timeout in seconds for LAN discovery (default 3s)")
+	flag.BoolVar(&discoverJSON, "discover-json", false, "Output discovered gateways in JSON format")
 	flag.StringVar(&configPath, "config", DefaultConfigPath, "Configure File Path")
 	flag.StringVar(&vertexImport, "vertex-import", "", "Import Vertex service account key JSON file")
 	flag.StringVar(&vertexImportPrefix, "vertex-import-prefix", "", "Prefix for Vertex model namespacing (use with -vertex-import)")
@@ -662,6 +677,9 @@ func main() {
 		cmd.DoKimiLogin(cfg, options)
 	} else if xaiLogin {
 		cmd.DoXAILogin(cfg, options)
+	} else if discoverGateways {
+		code := cmd.DoDiscover(time.Duration(discoverTimeout)*time.Second, discoverJSON)
+		os.Exit(code)
 	} else {
 		// In cloud deploy mode without config file, just wait for shutdown signals
 		if isCloudDeploy && !configFileExists {
