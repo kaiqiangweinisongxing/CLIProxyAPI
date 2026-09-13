@@ -238,7 +238,7 @@ type DiscoveryConfig struct {
 	// ServiceType is the DNS-SD service type (default: _ai-gateway._tcp).
 	ServiceType string `yaml:"service-type" json:"service-type"`
 
-	// Subtypes specifies DNS-SD subtypes to advertise (e.g. _cliproxy, _openai, _anthropic).
+	// Subtypes specifies DNS-SD subtypes to advertise (e.g. _cpa, _openai, _anthropic, _gemini).
 	Subtypes []string `yaml:"subtypes" json:"subtypes"`
 
 	// Interfaces specifies network interface filtering rules.

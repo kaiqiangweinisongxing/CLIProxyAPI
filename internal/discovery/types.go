@@ -13,8 +13,8 @@ const (
 	DefaultServiceType = "_ai-gateway._tcp"
 	// DefaultDomain is the link-local domain used by mDNS.
 	DefaultDomain = "local."
-	// SubtypeCliproxy is the CPA product subtype.
-	SubtypeCliproxy = "_cliproxy"
+	// SubtypeCPA is the CPA product subtype.
+	SubtypeCPA = "_cpa"
 	// SubtypeOpenAI is the OpenAI compatibility subtype.
 	SubtypeOpenAI = "_openai"
 	// SubtypeAnthropic is the Anthropic compatibility subtype.

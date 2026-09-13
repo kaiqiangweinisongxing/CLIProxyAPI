@@ -60,7 +60,7 @@ func validateServiceType(st string) error {
 }
 
 // sanitizeSubtype validates and normalizes a subtype label according to RFC 6763 §7.1.
-// Returns a valid label prefixed with '_' (e.g. "_cliproxy") or empty string if invalid.
+// Returns a valid label prefixed with '_' (e.g. "_cpa") or empty string if invalid.
 func sanitizeSubtype(sub string) string {
 	sub = strings.TrimSpace(sub)
 	if sub == "" {
@@ -141,7 +141,7 @@ func BuildServiceSpec(cfg *config.Config, port int, tlsEnabled bool) (ServiceSpe
 	var subtypes []string
 	rawSubtypes := discCfg.Subtypes
 	if len(rawSubtypes) == 0 {
-		rawSubtypes = []string{SubtypeCliproxy, SubtypeOpenAI, SubtypeAnthropic, SubtypeGemini}
+		rawSubtypes = []string{SubtypeCPA, SubtypeOpenAI, SubtypeAnthropic, SubtypeGemini}
 	}
 	for _, raw := range rawSubtypes {
 		if clean := sanitizeSubtype(raw); clean != "" {
@@ -149,7 +149,7 @@ func BuildServiceSpec(cfg *config.Config, port int, tlsEnabled bool) (ServiceSpe
 		}
 	}
 	if len(subtypes) == 0 {
-		subtypes = []string{SubtypeCliproxy}
+		subtypes = []string{SubtypeCPA}
 	}
 
 	// 5. Interface filtering (Scheme C)

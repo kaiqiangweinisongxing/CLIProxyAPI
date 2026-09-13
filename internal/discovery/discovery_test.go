@@ -171,15 +171,15 @@ func TestValidation_ServiceTypeAndLabels(t *testing.T) {
 	}
 
 	// Subtype sanitization
-	if s := sanitizeSubtype("cliproxy"); s != "_cliproxy" {
-		t.Errorf("expected _cliproxy, got %s", s)
+	if s := sanitizeSubtype("cpa"); s != "_cpa" {
+		t.Errorf("expected _cpa, got %s", s)
 	}
-	if s := sanitizeSubtype("_cliproxy"); s != "_cliproxy" {
-		t.Errorf("expected _cliproxy, got %s", s)
+	if s := sanitizeSubtype("_cpa"); s != "_cpa" {
+		t.Errorf("expected _cpa, got %s", s)
 	}
 	// Invalid subtypes (RFC 6763 §7.1 violation)
-	if s := sanitizeSubtype("_cliproxy._sub"); s != "" {
-		t.Errorf("expected empty for _cliproxy._sub, got %s", s)
+	if s := sanitizeSubtype("_cpa._sub"); s != "" {
+		t.Errorf("expected empty for _cpa._sub, got %s", s)
 	}
 	if s := sanitizeSubtype("_openai_"); s != "" {
 		t.Errorf("expected empty for _openai_, got %s", s)
@@ -321,7 +321,7 @@ func TestAdvertiserAndBrowser_Integration(t *testing.T) {
 		ServiceType:  DefaultServiceType,
 		Domain:       DefaultDomain,
 		Port:         54321,
-		Subtypes:     []string{SubtypeCliproxy},
+		Subtypes:     []string{SubtypeCPA},
 		TextRecords:  BuildTXTRecords(DefaultTXTOptions()),
 		Interfaces:   ifaces,
 	}
