@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grandcat/zeroconf"
+	"github.com/libp2p/zeroconf/v2"
 	log "github.com/sirupsen/logrus"
 )
 
-// ZeroconfAdvertiser wraps grandcat/zeroconf.Server with defensive lifecycle management.
+// ZeroconfAdvertiser wraps libp2p/zeroconf/v2 Server with defensive lifecycle management.
 type ZeroconfAdvertiser struct {
 	mu       sync.Mutex
 	servers  []*zeroconf.Server
@@ -28,7 +28,7 @@ func NewZeroconfAdvertiser() *ZeroconfAdvertiser {
 }
 
 // extractCleanHost returns bare hostname without any .local suffix
-// to prevent grandcat/zeroconf from appending a duplicate .local. (e.g. on macOS).
+// to prevent libp2p/zeroconf/v2 from appending a duplicate .local. (e.g. on macOS).
 func extractCleanHost() string {
 	h, err := os.Hostname()
 	if err != nil || h == "" {
@@ -126,10 +126,17 @@ func (a *ZeroconfAdvertiser) Start(ctx context.Context, spec ServiceSpec) (err e
 		return fmt.Errorf("discovery: no qualified IP addresses found on specified interfaces")
 	}
 
-	// 1. Primary advertisement: e.g. _ai-gateway._tcp
+	// 1. Primary advertisement: e.g. _ai-gateway._tcp with native comma-separated subtypes (RFC 6763 §7.1)
+	primaryService := serviceType
+	for _, sub := range spec.Subtypes {
+		if clean := sanitizeSubtype(sub); clean != "" {
+			primaryService += "," + clean
+		}
+	}
+
 	primaryServer, errRegister := zeroconf.RegisterProxy(
 		spec.InstanceName,
-		serviceType,
+		primaryService,
 		domain,
 		spec.Port,
 		cleanHost,
@@ -138,36 +145,11 @@ func (a *ZeroconfAdvertiser) Start(ctx context.Context, spec ServiceSpec) (err e
 		spec.Interfaces,
 	)
 	if errRegister != nil {
-		return fmt.Errorf("discovery: failed to register primary service %s: %w", serviceType, errRegister)
+		return fmt.Errorf("discovery: failed to register primary service %s: %w", primaryService, errRegister)
 	}
 	a.servers = append(a.servers, primaryServer)
 
-	// 2. Subtype / Alias registration if requested
-	for _, sub := range spec.Subtypes {
-		sub = strings.TrimSpace(sub)
-		if sub == "" {
-			continue
-		}
-		// Register subtype PTR or alias: e.g. _cliproxy._sub._ai-gateway._tcp
-		subTypeStr := fmt.Sprintf("%s._sub.%s", sub, serviceType)
-		subServer, errSub := zeroconf.RegisterProxy(
-			spec.InstanceName,
-			subTypeStr,
-			domain,
-			spec.Port,
-			cleanHost,
-			ips,
-			spec.TextRecords,
-			spec.Interfaces,
-		)
-		if errSub == nil {
-			a.servers = append(a.servers, subServer)
-		} else {
-			log.Debugf("discovery: optional subtype registration for %s skipped: %v", subTypeStr, errSub)
-		}
-	}
-
-	// 3. Legacy compatibility alias registration (_cliproxy._tcp) if requested
+	// 2. Legacy compatibility alias registration (_cliproxy._tcp) if requested
 	if spec.LegacyAlias && spec.ServiceType != "_cliproxy._tcp" {
 		aliasServer, errAlias := zeroconf.RegisterProxy(
 			spec.InstanceName,
@@ -244,13 +226,17 @@ func (b *ZeroconfBrowser) Browse(ctx context.Context, serviceType, domain string
 		serviceType = DefaultServiceType
 	}
 
-	resolver, err := zeroconf.NewResolver(b.options...)
-	if err != nil {
-		return nil, fmt.Errorf("discovery: failed to initialize resolver: %w", err)
-	}
-
 	ctxTimeout, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+
+	// If parent context is canceled earlier, cancel timeout context immediately
+	go func() {
+		select {
+		case <-ctxTimeout.Done():
+		case <-ctx.Done():
+			cancel()
+		}
+	}()
 
 	entries := make(chan *zeroconf.ServiceEntry, 32)
 	var discovered []DiscoveredService
@@ -276,18 +262,13 @@ func (b *ZeroconfBrowser) Browse(ctx context.Context, serviceType, domain string
 		}
 	}()
 
-	errBrowse := resolver.Browse(ctxTimeout, serviceType, domain, entries)
+	errBrowse := zeroconf.Browse(ctxTimeout, serviceType, domain, entries, b.options...)
 	if errBrowse != nil {
-		cancel() // Signal resolver to terminate
-		<-doneCh // Wait for entries channel to be closed by resolver
+		cancel()
+		<-doneCh
 		return nil, fmt.Errorf("discovery: browse query failed: %w", errBrowse)
 	}
 
-	select {
-	case <-ctxTimeout.Done():
-	case <-ctx.Done():
-		cancel()
-	}
 	<-doneCh
 
 	return discovered, nil
