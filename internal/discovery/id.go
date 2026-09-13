@@ -17,8 +17,8 @@ const (
 )
 
 var (
-	idMu     sync.Mutex
-	cachedID string
+	idMu      sync.Mutex
+	cachedIDs = make(map[string]string)
 )
 
 func isValidHex4(s string) bool {
@@ -36,23 +36,28 @@ func isValidHex4(s string) bool {
 
 // GetOrGenerateInstanceID retrieves the persistent instance ID from stateDir,
 // or generates a new 4-character hex ID (e.g. "8F3B") and persists it atomically.
-// Thread-safe and protected against race conditions and file permission issues.
+// Thread-safe, cached per stateDir, and protected against race conditions.
 func GetOrGenerateInstanceID(stateDir string) string {
+	cleanDir := ""
+	if stateDir != "" {
+		cleanDir = filepath.Clean(stateDir)
+	}
+
 	idMu.Lock()
 	defer idMu.Unlock()
 
-	// If already resolved and cached in-process, return immediately
-	if cachedID != "" && isValidHex4(cachedID) {
-		return cachedID
+	// If already resolved and cached in-process for this directory, return immediately
+	if id, ok := cachedIDs[cleanDir]; ok && isValidHex4(id) {
+		return id
 	}
 
-	if stateDir != "" {
-		idPath := filepath.Join(stateDir, instanceIDFilename)
+	if cleanDir != "" {
+		idPath := filepath.Join(cleanDir, instanceIDFilename)
 		if data, err := os.ReadFile(idPath); err == nil {
 			id := strings.TrimSpace(string(data))
 			if isValidHex4(id) {
-				cachedID = strings.ToUpper(id)
-				return cachedID
+				cachedIDs[cleanDir] = strings.ToUpper(id)
+				return cachedIDs[cleanDir]
 			}
 		}
 	}
@@ -66,10 +71,10 @@ func GetOrGenerateInstanceID(stateDir string) string {
 	id := strings.ToUpper(hex.EncodeToString(buf))
 
 	// Persist atomically if stateDir is specified
-	if stateDir != "" {
-		if errDir := os.MkdirAll(stateDir, 0700); errDir == nil {
-			idPath := filepath.Join(stateDir, instanceIDFilename)
-			if tmpFile, errTmp := os.CreateTemp(stateDir, "instance_id_*.tmp"); errTmp == nil {
+	if cleanDir != "" {
+		if errDir := os.MkdirAll(cleanDir, 0700); errDir == nil {
+			idPath := filepath.Join(cleanDir, instanceIDFilename)
+			if tmpFile, errTmp := os.CreateTemp(cleanDir, "instance_id_*.tmp"); errTmp == nil {
 				tmpPath := tmpFile.Name()
 				_ = tmpFile.Chmod(0600)
 				_, _ = tmpFile.Write([]byte(id))
@@ -82,15 +87,15 @@ func GetOrGenerateInstanceID(stateDir string) string {
 		}
 	}
 
-	cachedID = id
+	cachedIDs[cleanDir] = id
 	return id
 }
 
-// ResetCachedInstanceID resets in-memory cached ID for test isolation.
+// ResetCachedInstanceID resets in-memory cached IDs for test isolation.
 func ResetCachedInstanceID() {
 	idMu.Lock()
 	defer idMu.Unlock()
-	cachedID = ""
+	cachedIDs = make(map[string]string)
 }
 
 // FormatInstanceName returns the custom name if non-empty,

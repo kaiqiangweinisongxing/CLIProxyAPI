@@ -59,14 +59,16 @@ func validateServiceType(st string) error {
 	return nil
 }
 
-// sanitizeSubtype ensures subtype is a valid DNS-SD label prefixed with '_'.
+// sanitizeSubtype validates and normalizes a subtype label according to RFC 6763 §7.1.
+// Returns a valid label prefixed with '_' (e.g. "_cliproxy") or empty string if invalid.
 func sanitizeSubtype(sub string) string {
 	sub = strings.TrimSpace(sub)
 	if sub == "" {
 		return ""
 	}
-	if idx := strings.Index(sub, "._sub"); idx != -1 {
-		sub = sub[:idx]
+	// Reject malformed attempts to pass full domain structures
+	if strings.Contains(sub, "._sub") || strings.Contains(sub, ".") {
+		return ""
 	}
 	if !strings.HasPrefix(sub, "_") {
 		sub = "_" + sub
@@ -75,8 +77,12 @@ func sanitizeSubtype(sub string) string {
 	if len(label) == 0 || len(label) > 63 {
 		return ""
 	}
+	// RFC 6335 / RFC 6763: alphanumeric and hyphen, cannot start or end with hyphen, no internal underscores
+	if label[0] == '-' || label[len(label)-1] == '-' {
+		return ""
+	}
 	for _, r := range label {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
 			return ""
 		}
 	}
@@ -107,6 +113,9 @@ func sanitizeInstanceName(name string) string {
 func BuildServiceSpec(cfg *config.Config, port int, tlsEnabled bool) (ServiceSpec, error) {
 	if cfg == nil {
 		return ServiceSpec{}, fmt.Errorf("discovery: config is nil")
+	}
+	if port < 1 || port > 65535 {
+		return ServiceSpec{}, fmt.Errorf("discovery: invalid service port %d (must be between 1 and 65535)", port)
 	}
 	discCfg := cfg.Discovery
 

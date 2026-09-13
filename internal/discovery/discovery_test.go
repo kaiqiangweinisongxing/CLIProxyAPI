@@ -57,7 +57,17 @@ func TestInstanceID_PersistenceAndFormat(t *testing.T) {
 		}
 	}
 
-	// 4. Format instance name with custom name override
+	// 5. Test directory isolation
+	tmpDirB, errB := os.MkdirTemp("", "cpa-discovery-test-b-*")
+	if errB == nil {
+		defer os.RemoveAll(tmpDirB)
+		idB := GetOrGenerateInstanceID(tmpDirB)
+		if len(idB) != 4 {
+			t.Errorf("expected 4-char hex ID for dir B, got %s", idB)
+		}
+	}
+
+	// 6. Format instance name with custom name override
 	name2 := FormatInstanceName("My-Custom-Node", id1)
 	if name2 != "My-Custom-Node" {
 		t.Errorf("expected custom name override, got %s", name2)
@@ -160,8 +170,21 @@ func TestValidation_ServiceTypeAndLabels(t *testing.T) {
 	if s := sanitizeSubtype("cliproxy"); s != "_cliproxy" {
 		t.Errorf("expected _cliproxy, got %s", s)
 	}
-	if s := sanitizeSubtype("_cliproxy._sub"); s != "_cliproxy" {
+	if s := sanitizeSubtype("_cliproxy"); s != "_cliproxy" {
 		t.Errorf("expected _cliproxy, got %s", s)
+	}
+	// Invalid subtypes (RFC 6763 §7.1 violation)
+	if s := sanitizeSubtype("_cliproxy._sub"); s != "" {
+		t.Errorf("expected empty for _cliproxy._sub, got %s", s)
+	}
+	if s := sanitizeSubtype("_openai_"); s != "" {
+		t.Errorf("expected empty for _openai_, got %s", s)
+	}
+	if s := sanitizeSubtype("_-openai"); s != "" {
+		t.Errorf("expected empty for _-openai, got %s", s)
+	}
+	if s := sanitizeSubtype("_openai-"); s != "" {
+		t.Errorf("expected empty for _openai-, got %s", s)
 	}
 
 	// Endpoint path sanitization

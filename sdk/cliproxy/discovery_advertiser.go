@@ -14,6 +14,7 @@ type discoveryAdvertiserManager struct {
 	advertiser discovery.Advertiser
 	enabled    bool
 	lastSpec   discovery.ServiceSpec
+	generation uint64
 }
 
 func newDiscoveryAdvertiserManager() *discoveryAdvertiserManager {
@@ -60,37 +61,65 @@ func (s *Service) shutdownDiscovery() error {
 
 func (m *discoveryAdvertiserManager) ApplyContext(ctx context.Context, cfg *config.Config, port int, tlsEnabled bool) bool {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if !cfg.Discovery.Enabled {
-		if m.advertiser != nil {
+		oldAdv := m.advertiser
+		m.advertiser = nil
+		m.enabled = false
+		m.lastSpec = discovery.ServiceSpec{}
+		m.generation++
+		m.mu.Unlock()
+
+		if oldAdv != nil {
 			log.Info("discovery: stopping mDNS advertisement (disabled by config)")
-			_ = m.advertiser.Stop()
-			m.advertiser = nil
-			m.enabled = false
+			_ = oldAdv.Stop()
 		}
 		return true
 	}
 
 	spec, err := discovery.BuildServiceSpec(cfg, port, tlsEnabled)
 	if err != nil {
+		m.mu.Unlock()
 		log.Warnf("discovery: failed to build service spec: %v", err)
 		return false
 	}
 
 	// Idempotence check: if already running and spec is unchanged, skip restart
 	if m.enabled && m.advertiser != nil && specEqual(m.lastSpec, spec) {
+		m.mu.Unlock()
 		return true
 	}
 
-	// If already enabled and running, restart with new spec on reload
-	if m.advertiser != nil {
-		_ = m.advertiser.Stop()
-		m.advertiser = nil
+	// Prepare two-phase swap: detach old advertiser and bump generation
+	oldAdv := m.advertiser
+	m.advertiser = nil
+	m.generation++
+	gen := m.generation
+	m.mu.Unlock()
+
+	// Perform network stop outside lock
+	if oldAdv != nil {
+		_ = oldAdv.Stop()
 	}
 
+	// Perform network start outside lock
 	adv := discovery.NewZeroconfAdvertiser()
-	if errStart := adv.Start(ctx, spec); errStart != nil {
+	errStart := adv.Start(ctx, spec)
+
+	// Commit new advertiser under lock only if generation matches
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.generation != gen {
+		// A newer reload or shutdown occurred while starting
+		if adv != nil {
+			_ = adv.Stop()
+		}
+		return false
+	}
+
+	if errStart != nil {
+		m.enabled = false
 		log.Warnf("discovery: failed to start mDNS advertiser: %v (degraded, HTTP intact)", errStart)
 		return false
 	}
@@ -104,14 +133,15 @@ func (m *discoveryAdvertiserManager) ApplyContext(ctx context.Context, cfg *conf
 
 func (m *discoveryAdvertiserManager) Shutdown() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	oldAdv := m.advertiser
+	m.advertiser = nil
+	m.enabled = false
 	m.lastSpec = discovery.ServiceSpec{}
-	if m.advertiser != nil {
-		err := m.advertiser.Stop()
-		m.advertiser = nil
-		m.enabled = false
-		return err
+	m.generation++
+	m.mu.Unlock()
+
+	if oldAdv != nil {
+		return oldAdv.Stop()
 	}
 	return nil
 }

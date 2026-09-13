@@ -83,6 +83,10 @@ func (a *ZeroconfAdvertiser) Start(ctx context.Context, spec ServiceSpec) (err e
 		return fmt.Errorf("discovery: cannot start advertiser with empty interface list (refusing fallback to all interfaces)")
 	}
 
+	if spec.Port < 1 || spec.Port > 65535 {
+		return fmt.Errorf("discovery: invalid service port %d (must be between 1 and 65535)", spec.Port)
+	}
+
 	a.stopCh = make(chan struct{})
 	a.stopOnce = sync.Once{}
 
@@ -279,7 +283,11 @@ func (b *ZeroconfBrowser) Browse(ctx context.Context, serviceType, domain string
 		return nil, fmt.Errorf("discovery: browse query failed: %w", errBrowse)
 	}
 
-	<-ctxTimeout.Done()
+	select {
+	case <-ctxTimeout.Done():
+	case <-ctx.Done():
+		cancel()
+	}
 	<-doneCh
 
 	return discovered, nil
