@@ -291,6 +291,19 @@ codex:
   # proxy_read_timeout, is what bounds them.
   # Default: false
   stream-bootstrap-buffering: false
+  # Maximum duration to hold back uncommitted response headers during bootstrap buffering.
+  # If the time ceiling is reached before the first generated token, the stream is released
+  # to the client and further in-stream overloads are delivered rather than failed over.
+  # This bounds how long trickled heartbeats or early empty frames can delay response headers
+  # before streaming begins.
+  # Note: The timeout check is evaluated as upstream frames arrive; it never aborts the upstream
+  # connection. Downstream headers are committed as soon as the downstream translator emits chunks
+  # (for formats that render handshake/heartbeats, headers commit immediately on release; for
+  # formats like Chat Completions and Gemini that render nothing until the first text token, headers
+  # commit when that first token arrives).
+  # Set to "0", "0s", "none", "unlimited", "disabled", "off", or "never" to disable the time ceiling and rely solely on frame/byte bounds.
+  # Default: 10s
+  stream-bootstrap-timeout: "10s"
   # When true, optimize Codex Desktop, codex-tui, and codex_cli_rs requests for multi-agent v2.
   # This refreshes Codex spawn_agent model details, removes message parameter encryption,
   # normalizes encrypted agent_message content for Codex, and converts agent_message input
